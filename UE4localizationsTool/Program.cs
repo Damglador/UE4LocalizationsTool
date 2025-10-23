@@ -5,12 +5,6 @@ namespace UE4localizationsTool
 {
     internal static class Program
     {
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool AttachConsole(int dwProcessId);
-        private const int ATTACH_PARENT_PROCESS = -1;
-
-
         public static string commandlines =
          $"{AppDomain.CurrentDomain.FriendlyName}  export     <(Locres/Uasset/Umap) FilePath>  <Options>\n" +
          $"{AppDomain.CurrentDomain.FriendlyName}  import     <(txt) FilePath>  <Options>\n" +
@@ -111,9 +105,7 @@ namespace UE4localizationsTool
                     Application.Run(FrmMain);
                     return;
                 }
-
-
-                AttachConsole(ATTACH_PARENT_PROCESS);
+                
                 Console.WriteLine("");
                 //  Console.SetCursorPosition(0, Console.CursorTop + 1);
 
