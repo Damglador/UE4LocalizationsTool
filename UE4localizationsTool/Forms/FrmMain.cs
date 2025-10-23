@@ -33,18 +33,39 @@ namespace UE4localizationsTool
             Checkforupdates.Checked = Properties.Settings.Default.CheckForUpdates;
         }
 
+        public static string[] RunZenity(params string[] args)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "zenity",
+                Arguments = string.Join(" ", args),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            
+            var proc = Process.Start(psi);
+            string output = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit();
+            
+            if (proc.ExitCode != 0 || string.IsNullOrEmpty(output))
+                return null;
+            return output.Split('|');
+        }
+
         private void OpenFile_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "All localizations files|*.uasset;*.locres;*.umap|Uasset File|*.uasset|Locres File|*.locres|Umap File|*.umap";
-            ofd.Title = "Open localizations File";
-
-
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-
-                LoadFile(ofd.FileName);
-            }
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--title='Open localizations file'",
+                "--file-filter='All localizations files | *.uasset *.locres *.umap'",
+                "--file-filter='Uasset File (.uasset) | *.uasset'",
+                "--file-filter='Locres File (.locres) | *.locres'",
+                "--file-filter='Umap File (.umap) | *.umap'"
+                );
+            if (paths != null)
+                LoadFile(paths[0]);
         }
 
 
@@ -127,18 +148,21 @@ namespace UE4localizationsTool
 
             if (this.SortApply && !(Asset is LocresFile)) SortDataGrid(2, true);
 
-            SaveFileDialog sfd = new SaveFileDialog();
-            sfd.Filter = "Text File|*.txt";
-            sfd.Title = "Export All Text";
-            sfd.FileName = Path.GetFileName(FilePath) + ".txt";
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--save",
+                "--confirm-overwrite",
+                "--title='Export All Text'",
+                $"--filename='{Path.GetFileName(FilePath)}.txt'",
+                "--file-filter='Text File | *.txt'"
+            );
 
-
-            if (sfd.ShowDialog() == DialogResult.OK)
+            if (paths != null)
             {
                 try
                 {
-
-                    using (var stream = new StreamWriter(sfd.FileName))
+                    using (var stream = new StreamWriter(paths[0]))
                     {
                         if (exportType == ExportType.WithNames)
                         {
@@ -154,7 +178,6 @@ namespace UE4localizationsTool
                             }
                             stream.WriteLine(dataGridView1.Rows[i].Cells["Text value"].Value.ToString());
                         }
-
                     }
                     if (dataGridView1.IsFilterApplied)
                     {
@@ -174,20 +197,22 @@ namespace UE4localizationsTool
 
         private void importAllTextToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--title='Import All Text'",
+                "--file-filter='Text File | *.txt *.csv'"
+            );
 
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "Text File|*.txt;*.csv";
-            ofd.Title = "Import All Text";
-
-            if (ofd.ShowDialog() == DialogResult.OK)
+            if (paths != null)
             {
                 if (this.SortApply && !(Asset is LocresFile)) SortDataGrid(2, true);
 
-                if (ofd.FileName.EndsWith(".csv", StringComparison.InvariantCulture))
+                if (paths[0].EndsWith(".csv", StringComparison.InvariantCulture))
                 {
                     try
                     {
-                        CSVFile.Instance.Load(this.dataGridView1, ofd.FileName);
+                        CSVFile.Instance.Load(this.dataGridView1, paths[0]);
                     }
                     catch (Exception ex)
                     {
@@ -203,7 +228,7 @@ namespace UE4localizationsTool
                 string[] DataGridStrings;
                 try
                 {
-                    DataGridStrings = System.IO.File.ReadAllLines(ofd.FileName);
+                    DataGridStrings = System.IO.File.ReadAllLines(paths[0]);
                 }
                 catch
                 {
@@ -232,7 +257,6 @@ namespace UE4localizationsTool
                             MessageBox.Show($"Corrupted string format in line " + (n + 1), this.Text, MessageBoxButtons.OK, MessageBoxIcon.Stop);
                             return;
                         }
-
                     }
 
                 }
@@ -242,40 +266,41 @@ namespace UE4localizationsTool
                     dataGridView1.SetValue(dataGridView1.Rows[n].Cells["Text value"], DataGridStrings[n]);
                 }
                 MessageBox.Show("Successful import!", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-
             }
-
-
-
         }
 
         private async void SaveFile(object sender, EventArgs e)
         {
 
-            SaveFileDialog sfd = new SaveFileDialog();
+            string filter = "";
             if (FilePath.ToLower().EndsWith(".locres"))
             {
-                sfd.Filter = "locres File|*.locres";
+                filter = "locres File | *.locres";
             }
             else if (FilePath.ToLower().EndsWith(".uasset"))
             {
-                sfd.Filter = "Uasset File|*.uasset";
+                filter = "Uasset File | *.uasset";
             }
             else if (FilePath.ToLower().EndsWith(".umap"))
             {
-                sfd.Filter = "Umap File|*.umap";
+                filter = "Umap File | *.umap";
             }
-
-            sfd.Title = "Save localizations file";
-            sfd.FileName = Path.GetFileNameWithoutExtension(FilePath) + "_NEW";
-            if (sfd.ShowDialog() == DialogResult.OK)
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--save",
+                "--confirm-overwrite",
+                "--title='Save localizations file'",
+                $"--filename='{Path.GetFileNameWithoutExtension(FilePath)}_NEW'",
+                $"--file-filter='{filter}'"
+            );
+            if (paths != null)
             {
                 try
                 {
                     StatusMessage("Saving File...", "Saving File ,please wait.");
                     Asset.LoadFromDataGridView(dataGridView1);
-                    await Task.Run(() => Asset.SaveFile(sfd.FileName));
+                    await Task.Run(() => Asset.SaveFile(paths[0]));
                     MessageBox.Show("Saved Successful.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
@@ -528,17 +553,21 @@ namespace UE4localizationsTool
 
         private void csvFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog();
-            sfd.Filter = "CSV File|*.csv";
-            sfd.Title = "Export All Text";
-            sfd.FileName = Path.GetFileName(FilePath) + ".csv";
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--save",
+                "--confirm-overwrite",
+                "--title='Export All Text'",
+                $"--filename='{Path.GetFileName(FilePath)}.csv'",
+                "--file-filter='CSV File | *.csv'"
+            );
 
-
-            if (sfd.ShowDialog() == DialogResult.OK)
+            if (paths != null)
             {
                 try
                 {
-                    CSVFile.Instance.Save(this.dataGridView1, sfd.FileName);
+                    CSVFile.Instance.Save(this.dataGridView1, paths[0]);
 
                     if (dataGridView1.IsFilterApplied)
                     {
@@ -653,12 +682,15 @@ namespace UE4localizationsTool
 
         private void mergeLocresFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "Locres File(s)|*.locres";
-            ofd.Title = "Select localization file(s)";
-            ofd.Multiselect = true;
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--multiple",
+                "--title='Select localization file(s)'",
+                "--file-filter='Locres File(s) | *.locres'"
+            );
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+            if (paths != null)
             {
                 StatusMessage("Merging locres files...", "Merging locres files, please wait.");
                 var dataTable = new System.Data.DataTable();
@@ -674,7 +706,7 @@ namespace UE4localizationsTool
 
                 try
                 {
-                    foreach (string fileName in ofd.FileNames)
+                    foreach (string fileName in paths)
                     {
                         foreach (var names in new LocresFile(fileName))
                         {
@@ -713,12 +745,18 @@ namespace UE4localizationsTool
 
         private void mergeUassetFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "All localizations files|*.uasset;*.umap|Uasset File|*.uasset|Umap File|*.umap";
-            ofd.Title = "Open localizations File";
-            ofd.Multiselect = true;
+            Application.DoEvents();
+            string[] paths = RunZenity(
+                "--file-selection",
+                "--multiple",
+                "--title='Open localizations file'",
+                "--file-filter='All localizations files | *.uasset *.locres *.umap'",
+                "--file-filter='Uasset File (.uasset) | *.uasset'",
+                "--file-filter='Locres File (.locres) | *.locres'",
+                "--file-filter='Umap File (.umap) | *.umap'"
+            );
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+            if (paths != null)
             {
                 StatusMessage("Merging uasset files...", "Merging uasset files, please wait.");
 
@@ -735,7 +773,7 @@ namespace UE4localizationsTool
 
                 try
                 {
-                    foreach (string fileName in ofd.FileNames)
+                    foreach (string fileName in paths)
                     {
                         foreach (var Strings in new Uexp(Uexp.GetUasset(fileName), true).StringNodes)
                         {
@@ -746,7 +784,7 @@ namespace UE4localizationsTool
                         }
                     }
 
-                      ((System.Data.DataTable)dataGridView1.DataSource).Merge(dataTable);
+                    ((System.Data.DataTable)dataGridView1.DataSource).Merge(dataTable);
 
 
                     MessageBox.Show("Uasset file(s) merged successfully.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
